@@ -11,6 +11,9 @@ module Guard
     def initialize(options={})
       @@rails_env = (options[:rails_env] || 'test').to_s unless @@rails_booted
       @@digest = options[:digest]
+      @@output_path = options[:output] || File.join(::Rails.public_path, config.assets.prefix)
+      @@clean = options[:clean] || options[:output].nil? # default to false if output option used.
+      @@assets = options[:assets] || config.assets.precompile
     end
 
     def self.apply_hacks
@@ -40,8 +43,7 @@ module Guard
       Rake::Task["tmp:cache:clear"].execute
       # copy from the "assets:clean" Rake task
       config = ::Rails.application.config
-      public_asset_path = File.join(::Rails.public_path, config.assets.prefix)
-      rm_rf public_asset_path, :secure => true
+      rm_rf @@output_path, :secure => true
     end
 
     def precompile
@@ -62,10 +64,9 @@ module Guard
       config.assets.digests = {}
 
       env      = ::Rails.application.assets
-      target   = File.join(::Rails.public_path, config.assets.prefix)
       compiler = Sprockets::StaticCompiler.new(env,
-                                               target,
-                                               config.assets.precompile,
+                                               @@output_path,
+                                               @@assets,
                                                :manifest_path => config.assets.manifest,
                                                :digest => config.assets.digest,
                                                :manifest => config.assets.digest.nil?)
@@ -80,7 +81,7 @@ module Guard
       self.class.boot_rails
       return false unless @@rails_booted
       begin
-        clean
+        clean if @@clean
         precompile
         true
       rescue => e
